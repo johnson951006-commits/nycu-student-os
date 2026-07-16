@@ -31,6 +31,9 @@ dependencies:
   shared_preferences: 2.3.3
   flutter_secure_storage: 9.2.2
 
+  # Localization (FA §7): gen_l10n runtime; version pinned to the SDK's own
+  intl: 0.19.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -38,5 +41,10 @@ dev_dependencies:
   build_runner: 2.4.13
   drift_dev: 2.21.0
 
+  # Golden testing (QS/FES §17): theme×locale component baselines
+  alchemist: 0.10.0
+
 flutter:
   uses-material-design: true
+  # gen_l10n from lib/core/l10n (l10n.yaml) on pub get (FA §7)
+  generate: true

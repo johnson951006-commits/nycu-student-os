@@ -1,0 +1,8 @@
+# gen_l10n configuration (FA §7): zh-TW is the template (primary market,
+# fallback direction per IRR §1.9); en must cover it 100% (arb-diff CI —
+# corpus-lint `arb-coverage`). Output generates into .dart_tool via
+# `flutter pub get` / `flutter gen-l10n` (synthetic package, not committed).
+arb-dir: lib/core/l10n
+template-arb-file: app_zh_TW.arb
+output-localization-file: app_localizations.dart
+nullable-getter: false

@@ -1,0 +1,68 @@
+{
+  "@@locale": "zh_TW",
+  "commonAppTitle": "NYCU Student OS",
+  "@commonAppTitle": {
+    "description": "Product name (PRD); not translated."
+  },
+  "errorPortalDown": "NYCU Portal 目前無法連線——顯示 {t} 的資料，我們會自動重試。",
+  "@errorPortalDown": {
+    "description": "IRR §7 E-PORTAL-DOWN",
+    "placeholders": {
+      "t": { "type": "String" }
+    }
+  },
+  "errorDbFail": "我們這邊出了點問題——你的資料安全無虞，請稍後再試。",
+  "@errorDbFail": {
+    "description": "IRR §7 E-DB-FAIL"
+  },
+  "errorNetTimeout": "連線逾時——請確認網路狀態。",
+  "@errorNetTimeout": {
+    "description": "IRR §7 E-NET-TIMEOUT"
+  },
+  "errorSyncFail": "目前無法與 Portal 同步，資料更新至 {t}。",
+  "@errorSyncFail": {
+    "description": "IRR §7 E-SYNC-FAIL",
+    "placeholders": {
+      "t": { "type": "String" }
+    }
+  },
+  "errorCookieExpired": "Portal 登入已過期——請重新登入以繼續同步。",
+  "@errorCookieExpired": {
+    "description": "IRR §7 E-COOKIE-EXPIRED"
+  },
+  "errorPermDenied": "Portal 未開放存取{category}，其他資料仍會正常同步。",
+  "@errorPermDenied": {
+    "description": "IRR §7 E-PERM-DENIED",
+    "placeholders": {
+      "category": { "type": "String" }
+    }
+  },
+  "errorParseDrift": "NYCU 更新了網站——{category} 同步暫停中，我們正在調整（通常一天內恢復）。你的資料保留至 {t}。",
+  "@errorParseDrift": {
+    "description": "IRR §7 E-PARSE-DRIFT",
+    "placeholders": {
+      "category": { "type": "String" },
+      "t": { "type": "String" }
+    }
+  },
+  "errorCalExpand": "行事曆暫時無法更新——顯示先前儲存的課表。",
+  "@errorCalExpand": {
+    "description": "IRR §7 E-CAL-EXPAND"
+  },
+  "errorNotifFail": "通知傳送失敗，已記錄在通知中心。",
+  "@errorNotifFail": {
+    "description": "IRR §7 E-NOTIF-FAIL"
+  },
+  "errorUnexpected": "發生非預期的錯誤，我們已收到回報——請再試一次。",
+  "@errorUnexpected": {
+    "description": "IRR §7 E-UNEXPECTED"
+  },
+  "errorPrefSave": "設定未能儲存——請再試一次。",
+  "@errorPrefSave": {
+    "description": "IRR §7 E-PREF-SAVE"
+  },
+  "errorSyncTotal": "目前無法載入你的學期資料。",
+  "@errorSyncTotal": {
+    "description": "IRR §7 E-SYNC-TOTAL"
+  }
+}

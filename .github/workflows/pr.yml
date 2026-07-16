@@ -66,10 +66,41 @@ jobs:
       - run: '[ -d app/lib ] && echo "flutter test (widget)" || echo "No client yet (INFRA-008) — widget gate stub."'
 
   golden:
+    # INFRA-009: token pipeline gate + component goldens (FES §6, QS §17).
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v4
-      - run: '[ -d app/lib ] && echo "alchemist goldens (0-diff)" || echo "No client yet (INFRA-008/009) — golden gate stub."'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.5
+          channel: stable
+      - name: Resolve packages (runs gen_l10n)
+        run: flutter pub get
+      - name: Token gate — schema, references, WCAG contrast (both modes), motion caps, regeneration clean
+        run: dart run tool/token_gen.dart --verify
+      - name: Regeneration is byte-clean (hand-edited tokens.g.dart fails)
+        run: |
+          dart run tool/token_gen.dart
+          git diff --exit-code lib/app/theme/tokens.g.dart
+      - name: Component goldens (theme × locale)
+        run: |
+          if [ -d test/goldens/goldens ]; then
+            flutter test test/goldens
+          else
+            echo "::error::No golden baselines committed yet — generating them as an artifact."
+            flutter test --update-goldens test/goldens || true
+            exit 1
+          fi
+      - name: Upload generated baselines when missing
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-baselines
+          path: app/test/goldens/goldens/
+          if-no-files-found: ignore
 
   backend:
     runs-on: ubuntu-latest

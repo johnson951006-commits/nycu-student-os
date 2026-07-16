@@ -1,0 +1,68 @@
+{
+  "@@locale": "en",
+  "commonAppTitle": "NYCU Student OS",
+  "@commonAppTitle": {
+    "description": "Product name (PRD); not translated."
+  },
+  "errorPortalDown": "NYCU Portal is unavailable — showing data from {t}. We'll retry automatically.",
+  "@errorPortalDown": {
+    "description": "IRR §7 E-PORTAL-DOWN",
+    "placeholders": {
+      "t": { "type": "String" }
+    }
+  },
+  "errorDbFail": "Something went wrong on our side — your data is safe. Try again in a moment.",
+  "@errorDbFail": {
+    "description": "IRR §7 E-DB-FAIL"
+  },
+  "errorNetTimeout": "Request timed out — check your connection.",
+  "@errorNetTimeout": {
+    "description": "IRR §7 E-NET-TIMEOUT"
+  },
+  "errorSyncFail": "We couldn't sync with Portal. Your data is current as of {t}.",
+  "@errorSyncFail": {
+    "description": "IRR §7 E-SYNC-FAIL",
+    "placeholders": {
+      "t": { "type": "String" }
+    }
+  },
+  "errorCookieExpired": "Portal session expired — sign in to resume sync.",
+  "@errorCookieExpired": {
+    "description": "IRR §7 E-COOKIE-EXPIRED"
+  },
+  "errorPermDenied": "NYCU Portal didn't allow access to {category}. Other data still syncs.",
+  "@errorPermDenied": {
+    "description": "IRR §7 E-PERM-DENIED",
+    "placeholders": {
+      "category": { "type": "String" }
+    }
+  },
+  "errorParseDrift": "NYCU changed their site — {category} sync is paused while we adapt (usually < a day). Your data is safe as of {t}.",
+  "@errorParseDrift": {
+    "description": "IRR §7 E-PARSE-DRIFT",
+    "placeholders": {
+      "category": { "type": "String" },
+      "t": { "type": "String" }
+    }
+  },
+  "errorCalExpand": "Calendar couldn't refresh — showing your last saved schedule.",
+  "@errorCalExpand": {
+    "description": "IRR §7 E-CAL-EXPAND"
+  },
+  "errorNotifFail": "We couldn't deliver a notification. It's recorded in your Notification Center.",
+  "@errorNotifFail": {
+    "description": "IRR §7 E-NOTIF-FAIL"
+  },
+  "errorUnexpected": "Something unexpected happened. It's been reported — try again.",
+  "@errorUnexpected": {
+    "description": "IRR §7 E-UNEXPECTED"
+  },
+  "errorPrefSave": "Couldn't save that setting — try again.",
+  "@errorPrefSave": {
+    "description": "IRR §7 E-PREF-SAVE"
+  },
+  "errorSyncTotal": "We couldn't load your semester right now.",
+  "@errorSyncTotal": {
+    "description": "IRR §7 E-SYNC-TOTAL"
+  }
+}

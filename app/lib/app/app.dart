@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,7 +19,8 @@ class NycuApp extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
 
     return MaterialApp(
-      title: 'NYCU Student OS',
+      onGenerateTitle: (BuildContext context) =>
+          AppLocalizations.of(context).commonAppTitle,
       debugShowCheckedModeBanner: false,
       themeMode: themeMode,
       theme: AppTheme.light(),
@@ -29,6 +31,7 @@ class NycuApp extends ConsumerWidget {
         Locale('en'),
       ],
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

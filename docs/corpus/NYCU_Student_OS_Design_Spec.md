@@ -73,16 +73,18 @@ Derived from NYCU's institutional blue, tuned for WCAG AA on white and near-blac
 
 ### Functional Hues (each with 50–950 ramps; key steps listed)
 
-| Hue | 100 | 500 | 600 | 700 | Meaning |
-|---|---|---|---|---|---|
-| `red` | `#FEE4E2` | `#F04438` | `#D92D20` | `#B42318` | Exams, overdue, destructive |
-| `orange` | `#FEEAD3` | `#F79009` | `#DC6803` | `#B54708` | Assignments, due-soon warnings |
-| `green` | `#D3F3DF` | `#12B76A` | `#039855` | `#027A48` | Completion, success, synced |
-| `yellow` | `#FEF3C7` | `#F5C518` | `#D9A507` | `#A97F05` | Sticky notes default, caution |
-| `purple` | `#EBE4FF` | `#7A5AF8` | `#6938EF` | `#5925DC` | Personal todos, focus features |
-| `teal` | `#CCF3F0` | `#0FB5AE` | `#0E9188` | `#107569` | Labs / secondary course category |
-| `pink` | `#FCE7F6` | `#EE46BC` | `#DD2590` | `#C11574` | Course identity option |
-| `indigo` | `#E0EAFF` | `#6172F3` | `#444CE7` | `#3538CD` | Course identity option |
+The 400-step is each hue's dark-mode presentation step (see §1.2 event tokens and the dark-mode rule in Part 7); all 400-steps are WCAG-verified ≥ 4.5:1 on `gray/900` and `gray/950`. *(400 column ratified via DS-AMD-001.)*
+
+| Hue | 100 | 400 | 500 | 600 | 700 | Meaning |
+|---|---|---|---|---|---|---|
+| `red` | `#FEE4E2` | `#F97066` | `#F04438` | `#D92D20` | `#B42318` | Exams, overdue, destructive |
+| `orange` | `#FEEAD3` | `#FDB022` | `#F79009` | `#DC6803` | `#B54708` | Assignments, due-soon warnings |
+| `green` | `#D3F3DF` | `#32D583` | `#12B76A` | `#039855` | `#027A48` | Completion, success, synced |
+| `yellow` | `#FEF3C7` | `#F7D144` | `#F5C518` | `#D9A507` | `#A97F05` | Sticky notes default, caution |
+| `purple` | `#EBE4FF` | `#9B8AFB` | `#7A5AF8` | `#6938EF` | `#5925DC` | Personal todos, focus features |
+| `teal` | `#CCF3F0` | `#2ED3B7` | `#0FB5AE` | `#0E9188` | `#107569` | Labs / secondary course category |
+| `pink` | `#FCE7F6` | `#F670C7` | `#EE46BC` | `#DD2590` | `#C11574` | Course identity option |
+| `indigo` | `#E0EAFF` | `#8098F9` | `#6172F3` | `#444CE7` | `#3538CD` | Course identity option |
 
 ### Course Identity Palette (auto-assigned, user-overridable)
 10-color rotation assigned to courses at first sync, in this order:
@@ -114,9 +116,9 @@ Format: `token → Light mode alias | Dark mode alias`
 | `text/disabled` | `gray/400` | `gray/600` | — |
 | `text/accent` | `blue/600` | `blue/300` | ≥ 4.5:1 |
 | `text/on-accent` | `gray/0` | `gray/950` | ≥ 4.5:1 |
-| `text/danger` | `red/600` | `#F97066` | ≥ 4.5:1 |
-| `text/success` | `green/700` | `#32D583` | ≥ 4.5:1 |
-| `text/warning` | `orange/700` | `#FDB022` | ≥ 4.5:1 |
+| `text/danger` | `red/600` | `red/400` (`#F97066`) | ≥ 4.5:1 |
+| `text/success` | `green/700` | `green/400` (`#32D583`) | ≥ 4.5:1 |
+| `text/warning` | `orange/700` | `orange/400` (`#FDB022`) | ≥ 4.5:1 |
 
 ### Borders & Lines
 | Token | Light | Dark |
@@ -797,4 +799,13 @@ Dark mode is a **first-class equal**, not an inversion. Governing choices:
 | 5.11 Semester Progress | Progress, Today | ProgressBar + milestones |
 | 5.12 Exam Countdown | Today, Progress | Countdown StatCard, stacked variant |
 
-*End of Design Specification v1.0*
+*End of Design Specification v1.1*
+
+---
+
+## Revision Log
+
+| Version | Date | Change |
+|---|---|---|
+| v1.0 | — | Initial frozen specification. |
+| v1.1 | 2026-07-16 | **DS-AMD-001** — §1.1: functional-hue 400-step column documented (5 new values: `yellow #F7D144`, `purple #9B8AFB`, `teal #2ED3B7`, `pink #F670C7`, `indigo #8098F9`; 3 formal labels: `red/400 #F97066`, `orange/400 #FDB022`, `green/400 #32D583` — values pre-existing in §1.2, unchanged). Completes the dark-mode alias set required by §1.2 event tokens and the Part 7 dark-mode rule. All 400-steps WCAG-verified ≥ 4.5:1 on `gray/900`/`gray/950`. Ratified via INFRA-009 Escalation, Option A. No other value changed. |
