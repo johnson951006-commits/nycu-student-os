@@ -1,4 +1,5 @@
 import type { DynamicModule, Type } from '@nestjs/common';
+import { FlagsModule } from '../shared/flags/flags.module';
 import type { AppProfile } from './app-profile';
 
 /**
@@ -20,7 +21,8 @@ export function modulesForProfile(
 ): Array<Type<unknown> | DynamicModule> {
   switch (profile) {
     case 'api':
-      return [];
+      // INFRA-010: remote-config endpoint (GET /v1/config, BIS §12.4).
+      return [FlagsModule];
     case 'sync-worker':
       return [];
     case 'notif-worker':

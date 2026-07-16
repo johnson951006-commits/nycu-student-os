@@ -838,6 +838,19 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Settings' }
 
+  # ────────────────────────── Remote config (§12.4) ──────────────────────────
+  /config:
+    get:
+      tags: [Settings]
+      summary: Evaluated feature-flag verdicts for the caller (server-side bucketing)
+      operationId: getConfig
+      responses:
+        '200':
+          description: Evaluated flags (client caches per FES §10)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfigResponse' }
+
   # ────────────────────────── Internal (OIDC-gated, §1.12) ───────────────────
   /internal/scheduler/tick:
     post:
@@ -1517,3 +1530,30 @@ components:
       type: object
       description: user_settings columns (DB §3.1); PATCH is partial
       additionalProperties: true
+
+    # ---- Remote config (BIS §12.4) ----
+    ConfigResponse:
+      type: object
+      description: >-
+        Server-evaluated flag verdicts (percent flags arrive bucketed —
+        clients never compute cohorts). Unknown keys MUST be tolerated
+        (registry may grow additively).
+      required: [flags, evaluatedAt]
+      properties:
+        flags:
+          type: object
+          description: Registered flag keys → evaluated verdicts
+          required:
+            - grades_sync
+            - sec_pinning_enforced
+            - sec_min_supported_version
+            - notif_digest_batching
+            - analytics
+          properties:
+            grades_sync: { type: boolean }
+            sec_pinning_enforced: { type: boolean }
+            sec_min_supported_version: { type: string }
+            notif_digest_batching: { type: boolean }
+            analytics: { type: boolean }
+          additionalProperties: true
+        evaluatedAt: { type: string, format: date-time }
