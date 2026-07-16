@@ -57,6 +57,8 @@ class AppButton extends StatelessWidget {
 
     final enabled = onPressed != null && !loading;
 
+    // DS §5.1 names no type token for button labels; `headline` (17/Semibold,
+    // §1.3) is the matching 17pt-semibold step — golden-visible for design QA.
     final labelText = Text(
       label,
       maxLines: 1,
