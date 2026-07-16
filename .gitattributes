@@ -1,0 +1,13 @@
+# Normalize line endings to LF across platforms (BEP §2 reproducible environments).
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ttf binary
+*.otf binary
+*.p8 binary
+*.p12 binary

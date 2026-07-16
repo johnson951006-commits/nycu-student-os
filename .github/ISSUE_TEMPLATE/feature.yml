@@ -1,0 +1,39 @@
+name: Feature
+description: A feature/task ready to enter a sprint (Definition of Ready — QS §1.2).
+labels: ["type:feat"]
+body:
+  - type: input
+    id: backlog-task
+    attributes:
+      label: Backlog Task ID
+      description: The exact task from the AI Implementation Backlog (one task; no merge/split).
+      placeholder: INFRA-001
+    validations:
+      required: true
+  - type: textarea
+    id: corpus-citation
+    attributes:
+      label: Governing corpus section(s)
+      description: The document + section that defines this work (behavior before style).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria (testable statements)
+      description: Each as "Given / When / Then ≤ measurable bound".
+    validations:
+      required: true
+  - type: input
+    id: test-ids
+    attributes:
+      label: Reserved QS test IDs
+      placeholder: AT-001..008, SEC-001..005
+    validations:
+      required: true
+  - type: textarea
+    id: cross-cutting
+    attributes:
+      label: Error codes / analytics / flags / a11y impact
+    validations:
+      required: true

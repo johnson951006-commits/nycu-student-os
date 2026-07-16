@@ -1,0 +1,26 @@
+# Sync the label taxonomy (.github/labels.yml, BEP §1.4) to the repository.
+# Runs when the label file changes on main, and on manual dispatch.
+name: labels-sync
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/labels.yml']
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  labels-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply labels
+        uses: micnncim/action-label-syncer@v1
+        with:
+          manifest: .github/labels.yml
+          prune: false # additive: never delete labels not in the manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

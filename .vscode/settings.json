@@ -1,0 +1,45 @@
+{
+  // Committed workspace settings (BEP §2). Byte-identical editor behavior for every contributor.
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // --- Dart / Flutter (client) ---
+  // Flutter SDK is provisioned per-project by FVM (app/.fvmrc); point the analyzer at it.
+  "dart.flutterSdkPath": "app/.fvm/flutter_sdk",
+  "dart.lineLength": 100,
+  "dart.runPubGetOnPubspecChanges": "prompt",
+  "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.rulers": [100],
+    "editor.selectionHighlight": false,
+    "editor.suggestSelection": "first",
+    "editor.tabCompletion": "onlySnippets",
+    "editor.wordBasedSuggestions": "off"
+  },
+
+  // --- TypeScript / NestJS (backend) ---
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "eslint.workingDirectories": ["backend"],
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+
+  // --- ARB (localization, FES §7) ---
+  "[arb]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+  // --- Noise reduction: hide generated / vendored trees ---
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/.fvm": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/generated": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "docs/corpus": false
+  }
+}

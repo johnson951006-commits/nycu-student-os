@@ -1,0 +1,538 @@
+// Prisma schema — the client model for the canonical schema (DB §7).
+//
+// The applied DDL lives in prisma/migrations/0001_init/migration.sql. Per DB §8,
+// objects Prisma cannot express (triggers, RLS, partitions, partial/expression/
+// GIN/BRIN indexes, generated columns, BIT, CHECK constraints) are owned by the
+// SQL migration and marked here as `@managed-by-sql`. This schema exists to
+// generate the type-safe client and is kept consistent with the migration.
+//
+// Two connection URLs for the PgBouncer topology (DB §10.2 / BIS §6.1):
+//   url       → pooled (transaction mode) for the runtime clients
+//   directUrl → direct connection for migrations / interactive transactions
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================================ identity & sessions
+model User {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String    @map("student_id")
+  displayName    String?   @map("display_name")
+  email          String?
+  locale         String    @default("zh-TW") // CHECK zh-TW|en @managed-by-sql
+  rolePreference String?   @map("role_preference") // CHECK student|ta @managed-by-sql
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz // trigger @managed-by-sql
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  settings      UserSettings?
+  portalSession PortalSession?
+  appSessions   AppSession[]
+  devices       Device[]
+  enrollments   Enrollment[]
+  todos         Todo[]
+  stickyNotes   StickyNote[]
+  calendarEvents CalendarEvent[]
+  notificationPrefs      NotificationPref[]
+  notificationSchedules  NotificationSchedule[]
+  notificationHistory    NotificationHistory[]
+  assignmentOverrides    AssignmentOverride[]
+  assignmentGrades       AssignmentGrade[]
+  weeklyStatistics       WeeklyStatistic[]
+  syncJob       SyncJob?
+  syncRuns      SyncRun[]
+
+  // unique on student_id WHERE deleted_at IS NULL @managed-by-sql
+  @@map("users")
+}
+
+model UserSettings {
+  userId                 String   @id @map("user_id") @db.Uuid
+  theme                  String   @default("auto") // CHECK @managed-by-sql
+  weekDisplay            String   @default("mon-fri") @map("week_display")
+  backgroundSyncEnabled  Boolean  @default(true) @map("background_sync_enabled")
+  wifiOnlySync           Boolean  @default(false) @map("wifi_only_sync")
+  showHiddenAssignments  Boolean  @default(false) @map("show_hidden_assignments")
+  dashboardLayout        Json     @default("[]") @map("dashboard_layout")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model PortalSession {
+  userId          String    @id @map("user_id") @db.Uuid
+  encCookieJar    Bytes     @map("enc_cookie_jar")
+  dekWrapped      Bytes     @map("dek_wrapped")
+  status          String    @default("ACTIVE") // CHECK @managed-by-sql
+  lastValidatedAt DateTime? @map("last_validated_at") @db.Timestamptz
+  failCount       Int       @default(0) @map("fail_count") @db.SmallInt
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("portal_sessions")
+}
+
+model AppSession {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  refreshHash   String    @map("refresh_hash")
+  rotatedFromId String?   @map("rotated_from") @db.Uuid
+  deviceLabel   String?   @map("device_label")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rotatedFrom AppSession?  @relation("RotationChain", fields: [rotatedFromId], references: [id])
+  rotations   AppSession[] @relation("RotationChain")
+
+  @@unique([refreshHash])
+  @@map("app_sessions")
+}
+
+model Device {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  platform    String // CHECK ios|android|web @managed-by-sql
+  pushToken   String    @map("push_token")
+  pushEnabled Boolean   @default(true) @map("push_enabled")
+  appVersion  String?   @map("app_version")
+  lastSeenAt  DateTime? @map("last_seen_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cacheMetadata OfflineCacheMetadata[]
+
+  @@unique([platform, pushToken])
+  @@map("devices")
+}
+
+// ============================================================ academic domain
+model Semester {
+  id         String   @id
+  startsOn   DateTime @map("starts_on") @db.Date
+  endsOn     DateTime @map("ends_on") @db.Date
+  milestones Json     @default("[]")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  courses    Course[]
+  exceptions AcademicCalendarException[]
+
+  @@map("semesters")
+}
+
+model AcademicCalendarException {
+  id         BigInt   @id @default(autoincrement())
+  semesterId String   @map("semester_id")
+  date       DateTime @db.Date
+  kind       String // CHECK holiday|makeup|suspension @managed-by-sql
+  label      String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  semester Semester @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+
+  @@unique([semesterId, date, kind])
+  @@map("academic_calendar_exceptions")
+}
+
+model Course {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  semesterId  String   @map("semester_id")
+  portalId    String   @map("portal_id")
+  code        String
+  titleZh     String?  @map("title_zh")
+  titleEn     String?  @map("title_en")
+  instructor  String?
+  contentHash String   @map("content_hash")
+  raw         Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  semester       Semester         @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  schedules      CourseSchedule[]
+  enrollments    Enrollment[]
+  assignments    Assignment[]
+  exams          Exam[]
+  todos          Todo[]
+  calendarEvents CalendarEvent[]
+
+  @@unique([semesterId, portalId])
+  @@map("courses")
+}
+
+model CourseSchedule {
+  id          String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId    String                       @map("course_id") @db.Uuid
+  weekday     Int                          @db.SmallInt // CHECK 1..7 @managed-by-sql
+  startsAt    DateTime                     @map("starts_at") @db.Time
+  endsAt      DateTime                     @map("ends_at") @db.Time
+  room        String?
+  building    String?
+  weekPattern String                       @default("ALL") @map("week_pattern") // CHECK @managed-by-sql
+  weekBitmask Unsupported("bit(18)")?      @map("week_bitmask")
+  changedAt   DateTime?                    @map("changed_at") @db.Timestamptz
+  createdAt   DateTime                     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime                     @default(now()) @map("updated_at") @db.Timestamptz
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, weekday])
+  @@map("course_schedules")
+}
+
+model Enrollment {
+  userId     String    @map("user_id") @db.Uuid
+  courseId   String    @map("course_id") @db.Uuid
+  colorIndex Int       @default(0) @map("color_index") @db.SmallInt
+  hidden     Boolean   @default(false)
+  droppedAt  DateTime? @map("dropped_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@id([userId, courseId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model Assignment {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId       String                  @map("course_id") @db.Uuid
+  portalId       String?                 @map("portal_id")
+  title          String
+  description    String?
+  dueAt          DateTime?               @map("due_at") @db.Timestamptz
+  dueConfidence  String                  @default("confirmed") @map("due_confidence")
+  source         String                  @default("portal")
+  status         String                  @default("active")
+  absentRunCount Int                     @default(0) @map("absent_run_count") @db.SmallInt
+  contentHash    String                  @map("content_hash")
+  raw            Json?
+  searchTsv      Unsupported("tsvector")? @map("search_tsv") // GENERATED STORED @managed-by-sql
+  firstSeenAt    DateTime                @default(now()) @map("first_seen_at") @db.Timestamptz
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime                @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?               @map("deleted_at") @db.Timestamptz
+
+  course      Course                  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  attachments AssignmentAttachment[]
+  grades      AssignmentGrade[]
+  overrides   AssignmentOverride[]
+  todos       Todo[]
+
+  @@index([courseId, status])
+  @@map("assignments")
+}
+
+model AssignmentAttachment {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assignmentId String    @map("assignment_id") @db.Uuid
+  portalKey    String    @map("portal_key")
+  filename     String
+  url          String?
+  firstSeenAt  DateTime  @default(now()) @map("first_seen_at") @db.Timestamptz
+  removedAt    DateTime? @map("removed_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, portalKey])
+  @@map("assignment_attachments")
+}
+
+model AssignmentGrade {
+  id           BigInt   @id @default(autoincrement())
+  assignmentId String   @map("assignment_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  grade        String
+  observedAt   DateTime @default(now()) @map("observed_at") @db.Timestamptz
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, userId, observedAt])
+  @@index([userId, assignmentId, observedAt(sort: Desc)])
+  @@map("assignment_grades")
+}
+
+model Exam {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId    String    @map("course_id") @db.Uuid
+  kind        String // CHECK midterm|final|quiz @managed-by-sql
+  startsAt    DateTime? @map("starts_at") @db.Timestamptz
+  durationMin Int?      @map("duration_min") @db.SmallInt
+  location    String?
+  source      String    @default("portal")
+  contentHash String    @map("content_hash")
+  changedAt   DateTime? @map("changed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@index([courseId])
+  @@map("exams")
+}
+
+model AssignmentOverride {
+  userId       String   @map("user_id") @db.Uuid
+  assignmentId String   @map("assignment_id") @db.Uuid
+  overrides    Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, assignmentId])
+  @@map("assignment_overrides")
+}
+
+// ============================================================ user productivity
+model Todo {
+  id           String    @id @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  assignmentId String?   @map("assignment_id") @db.Uuid
+  courseId     String?   @map("course_id") @db.Uuid
+  title        String
+  dueAt        DateTime? @map("due_at") @db.Timestamptz
+  priority     Int       @default(3) @db.SmallInt
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz
+  hiddenAt     DateTime? @map("hidden_at") @db.Timestamptz
+  sortOrder    Float     @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  course     Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([assignmentId])
+  @@map("todos")
+}
+
+model StickyNote {
+  id              String    @id @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  body            String
+  color           String    @default("yellow")
+  pinnedDate      DateTime? @map("pinned_date") @db.Date
+  pinnedDashboard Boolean   @default(true) @map("pinned_dashboard")
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sticky_notes")
+}
+
+model CalendarEvent {
+  id        String    @id @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  courseId  String?   @map("course_id") @db.Uuid
+  title     String
+  startsAt  DateTime  @map("starts_at") @db.Timestamptz
+  endsAt    DateTime? @map("ends_at") @db.Timestamptz
+  allDay    Boolean   @default(false) @map("all_day")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@map("calendar_events")
+}
+
+// ============================================================ notifications
+model NotificationPref {
+  userId     String   @map("user_id") @db.Uuid
+  scope      String // CHECK global|course|assignment @managed-by-sql
+  scopeId    String   @default("00000000-0000-0000-0000-000000000000") @map("scope_id") @db.Uuid
+  enabled    Boolean?
+  offsets    Json?
+  quietHours Json?    @map("quiet_hours")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, scope, scopeId])
+  @@map("notification_prefs")
+}
+
+model NotificationSchedule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  subjectType String   @map("subject_type") // CHECK assignment|exam @managed-by-sql
+  subjectId   String   @map("subject_id") @db.Uuid
+  fireAt      DateTime @map("fire_at") @db.Timestamptz
+  offsetLabel String   @map("offset_label")
+  kind        String   @default("offset")
+  status      String   @default("pending")
+  generation  Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectType, subjectId, offsetLabel, generation])
+  @@map("notification_schedules")
+}
+
+// Partitioned by created_at (RANGE) + BRIN index @managed-by-sql
+model PushDelivery {
+  id         BigInt   @default(autoincrement())
+  scheduleId String?  @map("schedule_id") @db.Uuid
+  deviceId   String?  @map("device_id") @db.Uuid
+  digestKey  String?  @map("digest_key")
+  result     String // CHECK @managed-by-sql
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([id, createdAt])
+  @@index([scheduleId])
+  @@map("push_deliveries")
+}
+
+// Partitioned by created_at (RANGE); append-only trigger @managed-by-sql
+model NotificationHistory {
+  id          String   @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  kind        String // CHECK (11 kinds) @managed-by-sql
+  subjectType String?  @map("subject_type")
+  subjectId   String?  @map("subject_id") @db.Uuid
+  payload     Json
+  readAt      DateTime? @map("read_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([id, createdAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notification_history")
+}
+
+// ============================================================ sync & operations
+model SyncJob {
+  userId              String   @id @map("user_id") @db.Uuid
+  tier                String   @default("warm") // CHECK @managed-by-sql
+  nextSyncAt          DateTime @default(now()) @map("next_sync_at") @db.Timestamptz
+  claimedAt           DateTime? @map("claimed_at") @db.Timestamptz
+  claimedBy           String?  @map("claimed_by")
+  consecutiveFailures Int      @default(0) @map("consecutive_failures") @db.SmallInt
+  categoryState       Json     @default("{}") @map("category_state")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sync_jobs")
+}
+
+// Partitioned by started_at (RANGE) + BRIN index @managed-by-sql
+model SyncRun {
+  id              BigInt    @default(autoincrement())
+  userId          String    @map("user_id") @db.Uuid
+  trigger         String // CHECK @managed-by-sql
+  status          String    @default("running")
+  categories      Json?
+  errorCode       String?   @map("error_code")
+  portalVersionId String?   @map("portal_version_id")
+  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt      DateTime? @map("finished_at") @db.Timestamptz
+  durationMs      Int?      @map("duration_ms")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([id, startedAt])
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("sync_runs")
+}
+
+model OfflineCacheMetadata {
+  deviceId            String   @map("device_id") @db.Uuid
+  category            String // CHECK (8 values) @managed-by-sql
+  lastDeltaCursor     String?  @map("last_delta_cursor")
+  lastFullSyncAt      DateTime? @map("last_full_sync_at") @db.Timestamptz
+  clientSchemaVersion Int      @default(1) @map("client_schema_version")
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, category])
+  @@map("offline_cache_metadata")
+}
+
+model PortalVersion {
+  id          String   @db.Text
+  pageType    String   @map("page_type")
+  domVersion  Int      @map("dom_version")
+  signatures  String[]
+  parserRange String   @map("parser_range")
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@id([id, pageType])
+  @@map("portal_versions")
+}
+
+model PortalPageHealth {
+  pageType       String    @id @map("page_type") // CHECK (6 pages) @managed-by-sql
+  parserVersion  String    @map("parser_version")
+  domVersion     Int?      @map("dom_version")
+  lastSignature  String?   @map("last_signature")
+  signatureKnown Boolean   @default(true) @map("signature_known")
+  lastSuccessAt  DateTime? @map("last_success_at") @db.Timestamptz
+  failureCount   Int       @default(0) @map("failure_count")
+  state          String    @default("active") // CHECK @managed-by-sql
+  stateReason    String?   @map("state_reason")
+  stateSince     DateTime? @map("state_since") @db.Timestamptz
+  recovery       String? // CHECK @managed-by-sql
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("portal_page_health")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedBy String   @map("updated_by")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("system_settings")
+}
+
+// ============================================================ statistics
+model WeeklyStatistic {
+  userId         String    @map("user_id") @db.Uuid
+  weekStart      DateTime  @map("week_start") @db.Date
+  totalTasks     Int       @default(0) @map("total_tasks")
+  completedTasks Int       @default(0) @map("completed_tasks")
+  recalculatedAt DateTime? @map("recalculated_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, weekStart])
+  @@map("weekly_statistics")
+}

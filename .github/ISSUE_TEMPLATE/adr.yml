@@ -1,0 +1,42 @@
+name: ADR
+description: Record an architecture decision (FES §16). Required for import-matrix changes, new dependencies, store-role changes, or reversing a spec binding.
+labels: ["needs-adr"]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Decision title (imperative)
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: The question forcing a decision, stated as a question.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Constraints (cite corpus sections). Facts only.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives (2–4, each with its strongest case)
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision + decisive reasons
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs (what we knowingly give up)
+    validations:
+      required: true

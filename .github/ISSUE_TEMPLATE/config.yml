@@ -1,0 +1,5 @@
+# Implementation is driven exclusively by the AI Implementation Backlog
+# (docs/corpus/NYCU_Student_OS_AI_Implementation_Backlog.md) — the only
+# authoritative queue. Ad-hoc blank issues are disabled; use the structured
+# templates (feature / bug / spec-amendment / adr).
+blank_issues_enabled: false

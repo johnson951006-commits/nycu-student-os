@@ -1,0 +1,73 @@
+{
+  // Launch configs (BEP §2): one per backend APP_PROFILE and per Flutter flavor.
+  // The referenced entry points are delivered by INFRA-004 (backend) and INFRA-008
+  // (client); these configs are the IDE wiring INFRA-002 owns and are inert until
+  // those entry points exist.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "backend: api",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/backend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start:dev"],
+      "env": { "APP_PROFILE": "api" },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "backend: sync-worker",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/backend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start:dev"],
+      "env": { "APP_PROFILE": "sync-worker" },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "backend: notif-worker",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/backend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start:dev"],
+      "env": { "APP_PROFILE": "notif-worker" },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "backend: jobs",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/backend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start:dev"],
+      "env": { "APP_PROFILE": "jobs" },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "app: dev",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/app",
+      "program": "lib/main.dart",
+      "args": ["--flavor", "dev", "--target", "lib/main.dart"]
+    },
+    {
+      "name": "app: staging",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/app",
+      "program": "lib/main.dart",
+      "args": ["--flavor", "staging", "--target", "lib/main.dart"]
+    },
+    {
+      "name": "app: prod",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/app",
+      "program": "lib/main.dart",
+      "args": ["--flavor", "prod", "--target", "lib/main.dart"]
+    }
+  ]
+}

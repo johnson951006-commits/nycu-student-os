@@ -1,0 +1,134 @@
+# Local development topology (OPS §3.1) — mirrors prod (OPS §1) closely enough to
+# catch wiring bugs. Image tags are pinned for byte-identical environments (BEP §2;
+# see docs/toolchain.md).
+#
+# Default `docker compose up` starts the INFRASTRUCTURE services only
+# (postgres · redis · pubsub-emulator · fixture-portal) — these exist and are
+# testable now. The application containers (pgbouncer · api · sync-worker ·
+# notif-worker · jobs) are declared under the `app` profile and activate with
+# `docker compose --profile app up` once their images/build contexts are provided
+# by INFRA-004 (backend), INFRA-008 (client), and INFRA-010 (Dockerfiles/PgBouncer).
+name: nycu-student-os-local
+
+services:
+  # ---------------- Infrastructure (available now) ----------------
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:497.0.0-emulators
+    command: >
+      gcloud beta emulators pubsub start
+      --host-port=0.0.0.0:8085
+      --project=${PUBSUB_PROJECT_ID}
+    ports:
+      - "${PUBSUB_PORT}:8085"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  fixture-portal:
+    # Static test double of the scraped upstream (QS §8). Recorded HTML fixtures are
+    # added under ./fixtures/portal/ by the parser tasks (e.g. COURSE-002); this task
+    # provides the runnable server + a health endpoint only.
+    image: nginx:1.27-alpine
+    ports:
+      - "${FIXTURE_PORTAL_PORT}:80"
+    volumes:
+      - ./fixtures/portal:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---------------- Application (profile: app — activated by later tasks) ----------------
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23.1-p2
+    profiles: ["app"]
+    environment:
+      DB_HOST: postgres
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "32"
+    ports:
+      - "${PGBOUNCER_PORT}:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: { context: ../backend, dockerfile: Dockerfile }
+    profiles: ["app"]
+    environment:
+      APP_PROFILE: api
+      NODE_ENV: development
+    depends_on:
+      pgbouncer: { condition: service_started }
+      redis: { condition: service_healthy }
+      pubsub-emulator: { condition: service_healthy }
+
+  sync-worker:
+    build: { context: ../backend, dockerfile: Dockerfile }
+    profiles: ["app"]
+    environment:
+      APP_PROFILE: sync-worker
+      NODE_ENV: development
+    depends_on:
+      pgbouncer: { condition: service_started }
+      redis: { condition: service_healthy }
+      pubsub-emulator: { condition: service_healthy }
+      fixture-portal: { condition: service_healthy }
+
+  notif-worker:
+    build: { context: ../backend, dockerfile: Dockerfile }
+    profiles: ["app"]
+    environment:
+      APP_PROFILE: notif-worker
+      NODE_ENV: development
+    depends_on:
+      pgbouncer: { condition: service_started }
+      redis: { condition: service_healthy }
+      pubsub-emulator: { condition: service_healthy }
+
+  jobs:
+    build: { context: ../backend, dockerfile: Dockerfile }
+    profiles: ["app"]
+    environment:
+      APP_PROFILE: jobs
+      NODE_ENV: development
+    depends_on:
+      pgbouncer: { condition: service_started }
+      pubsub-emulator: { condition: service_healthy }
+
+volumes:
+  postgres-data:

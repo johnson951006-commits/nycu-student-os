@@ -1,0 +1,26 @@
+# CODEOWNERS — governed review ownership (BEP §1.5)
+# Reviews are required from the listed owners on any PR touching these paths
+# (enforced by the pull_request rule in .github/rulesets/main.json:
+#  require_code_owner_review = true).
+
+# --- Backend ---
+/backend/                        @backend-team
+/backend/src/modules/portal/     @backend-lead                 # parser = R1: senior review mandatory
+/backend/src/modules/auth/       @backend-lead @security-owner # credential handling = R1
+
+# --- Client ---
+/app/                            @flutter-team
+/app/lib/core/sync/              @flutter-lead                 # outbox/conflict = R1
+
+# --- Shared contracts (changes need BOTH stacks' leads) ---
+/contracts/openapi/              @backend-lead @flutter-lead
+/contracts/tokens/               @design-owner @flutter-lead
+
+# --- Infrastructure ---
+/infra/                          @sre-owner
+
+# --- Frozen corpus: amendments are a governance act (AI_Coding_Protocol §11.3) ---
+/docs/corpus/                    @eng-manager @architect
+
+# --- Repository governance itself ---
+/.github/                        @eng-manager

@@ -1,0 +1,18 @@
+# openapi-generator config (INFRA-007) — generates the Dart client both stacks
+# reference. Idiomatic Flutter/dio client (dart-dio). Output is CI-only and NOT
+# committed: the contract is the source of truth, the client is regenerated per
+# release (BIS §12.2 "Contract ownership"). CI runs:
+#   openapi-generator-cli generate -c contracts/openapi/dart-client-config.yaml
+#   (then) dart pub get && dart run build_runner build && dart analyze  → compile gate
+generatorName: dart-dio
+inputSpec: contracts/openapi/openapi.yaml
+outputDir: build/dart-client
+additionalProperties:
+  pubName: nycu_api
+  pubVersion: 1.1.0
+  pubDescription: NYCU Student OS generated API client (do not edit — regenerated from openapi.yaml)
+  serializationLibrary: built_value
+  # Non-strict decoding: clients MUST tolerate unknown fields and unknown
+  # x-extensible-enum values (BIS §12.2 mobile-compatibility binding rule).
+  ensureUniqueParams: true
+  useEnumExtension: true

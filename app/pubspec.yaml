@@ -1,0 +1,42 @@
+name: nycu_student_os
+description: NYCU Student OS — the single, trusted academic workspace (client).
+publish_to: none
+version: 0.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: "3.24.5"
+
+# Dependency pins for byte-identical environments (BEP §2 / docs/toolchain.md).
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management / DI (FA §4/§5)
+  flutter_riverpod: 2.6.1
+
+  # Local-first store: drift over SQLCipher (FA §9.2 / FES §13)
+  drift: 2.21.0
+  sqlite3: 2.4.6
+  sqlite3_flutter_libs: 0.5.26
+  sqlcipher_flutter_libs: 0.6.4
+  path: 1.9.0
+  path_provider: 2.1.5
+
+  # Structured caches (Hive) + primitives (SharedPreferences) + secrets (Keychain/Keystore)
+  hive: 2.2.3
+  hive_flutter: 1.1.0
+  shared_preferences: 2.3.3
+  flutter_secure_storage: 9.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 5.0.0
+  build_runner: 2.4.13
+  drift_dev: 2.21.0
+
+flutter:
+  uses-material-design: true

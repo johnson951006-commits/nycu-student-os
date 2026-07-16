@@ -1,0 +1,1519 @@
+openapi: 3.0.3
+# ─────────────────────────────────────────────────────────────────────────────
+# NYCU Student OS — frozen transport contract (INFRA-007, B-2).
+# Single artifact BOTH stacks code against (BIS §12.2 "Contract ownership").
+# Authored VERBATIM from BIS §5 (endpoints/requests/responses/codes) under the
+# §5.1 conventions; versioning/breaking rules per §12.2 (enforced by the
+# openapi-diff CI gate). Additive changes (new endpoints / optional fields /
+# x-extensible-enum values) are allowed within /v1; anything breaking ⇒ /v2.
+# ─────────────────────────────────────────────────────────────────────────────
+info:
+  title: NYCU Student OS API
+  version: 1.1.0
+  description: >-
+    Academic-workspace API for NYCU students. Local-first client + sync backend.
+    Errors are RFC 7807 problem+json with a `code` from the IRR §7 registry.
+  license:
+    name: Proprietary
+    url: https://nycu-os.app/legal
+servers:
+  - url: https://api.nycu-os.app/v1
+    description: Production (path-versioned, §5.1)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Sync
+  - name: Courses
+  - name: Assignments
+  - name: Todos
+  - name: Notes
+  - name: Calendar
+  - name: Stats
+  - name: Notifications
+  - name: Devices
+  - name: Settings
+  - name: Internal
+  - name: Health
+
+paths:
+  # ─────────────────────────────── Auth (§5.2) ───────────────────────────────
+  /auth/portal-session:
+    post:
+      tags: [Auth]
+      summary: Establish a session from a Portal cookie handoff
+      operationId: createPortalSession
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AppVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalSessionRequest' }
+      responses:
+        '201':
+          description: Session created; initial sync enqueued
+          headers: { X-Request-Id: { $ref: '#/components/headers/RequestId' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionCreated' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /auth/reauth-session:
+    post:
+      tags: [Auth]
+      summary: Re-establish an expired Portal session (same handoff shape)
+      operationId: reauthPortalSession
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AppVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalSessionRequest' }
+      responses:
+        '200':
+          description: Session restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionRestored' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate the refresh token (reuse detection revokes the chain)
+      operationId: refreshTokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: Rotated token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current session
+      operationId: logout
+      responses:
+        '204': { description: Session revoked }
+
+  /auth/session:
+    get:
+      tags: [Auth]
+      summary: Current session status
+      operationId: getSession
+      responses:
+        '200':
+          description: Session info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+
+  # ─────────────────────────────── Sync (§5.2) ───────────────────────────────
+  /sync/manual:
+    post:
+      tags: [Sync]
+      summary: Trigger a manual sync (debounced; may attach to a running run)
+      operationId: triggerManualSync
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManualSyncAccepted' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sync/status:
+    get:
+      tags: [Sync]
+      summary: Sync status (ETag'd for cheap polling)
+      operationId: getSyncStatus
+      parameters: [ { $ref: '#/components/parameters/IfNoneMatch' } ]
+      responses:
+        '200':
+          description: Status
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncStatus' }
+        '304': { description: Not modified }
+
+  /sync/runs/{id}/cancel:
+    post:
+      tags: [Sync]
+      summary: Cancel a running sync run
+      operationId: cancelSyncRun
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '202': { description: Cancellation accepted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sync/health:
+    get:
+      tags: [Sync]
+      summary: Portal + per-category sync health
+      operationId: getSyncHealth
+      responses:
+        '200':
+          description: Health
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncHealth' }
+
+  /sync/retry:
+    post:
+      tags: [Sync]
+      summary: Retry sync (optionally one category)
+      operationId: retrySync
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetryRequest' }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [syncRunId]
+                properties: { syncRunId: { type: string, format: uuid } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sync/runs:
+    get:
+      tags: [Sync]
+      summary: Sync run history (startedAt desc)
+      operationId: listSyncRuns
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of runs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncRunPage' }
+
+  # ────────────────────────── Courses & timetable (§5.2) ─────────────────────
+  /courses:
+    get:
+      tags: [Courses]
+      summary: Courses for a semester (bounded, no pagination)
+      operationId: listCourses
+      parameters:
+        - name: semester
+          in: query
+          schema: { type: string, example: '2026-1' }
+        - name: includeDropped
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Courses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Course' }
+
+  /courses/{id}:
+    get:
+      tags: [Courses]
+      summary: Course detail (+ active assignments, exams, notif-prefs summary)
+      operationId: getCourse
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '200':
+          description: Course detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /courses/{id}/enrollment:
+    patch:
+      tags: [Courses]
+      summary: Update enrollment presentation (color / hidden)
+      operationId: patchEnrollment
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnrollmentPatch' }
+      responses:
+        '200':
+          description: Updated enrollment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Course' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /courses/{id}/notification-prefs:
+    patch:
+      tags: [Courses]
+      summary: Update course-level notification prefs
+      operationId: patchCourseNotificationPrefs
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPrefPatch' }
+      responses:
+        '200':
+          description: Effective prefs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectivePrefs' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────────── Assignments (§5.2) ──────────────────────────
+  /assignments:
+    get:
+      tags: [Assignments]
+      summary: List assignments (filtered/sorted, keyset)
+      operationId: listAssignments
+      parameters:
+        - { name: courseId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string, enum: [active, archived] } }
+        - { name: dueFrom, in: query, schema: { type: string, format: date-time } }
+        - { name: dueTo, in: query, schema: { type: string, format: date-time } }
+        - { name: urgency, in: query, schema: { type: string, enum: [overdue, soon, later] } }
+        - { name: hidden, in: query, schema: { type: string, enum: [include, exclude, only], default: exclude } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [dueAt, createdAt], default: dueAt } }
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of assignments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssignmentPage' }
+    post:
+      tags: [Assignments]
+      summary: Create a manual assignment
+      operationId: createAssignment
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAssignment' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assignments/{id}:
+    patch:
+      tags: [Assignments]
+      summary: Edit assignment (portal-sourced edits become overrides, FR-14)
+      operationId: patchAssignment
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchAssignment' }
+      responses:
+        '200':
+          description: Merged projection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Assignment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assignments/{id}/notifications:
+    patch:
+      tags: [Assignments]
+      summary: Toggle assignment notifications
+      operationId: patchAssignmentNotifications
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties: { enabled: { type: boolean } }
+      responses:
+        '200':
+          description: Effective
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  effective: { type: boolean }
+                  hidden: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assignments/{id}/grade:
+    get:
+      tags: [Assignments]
+      summary: Assignment grade (flag-gated; separate authz/audit path)
+      operationId: getAssignmentGrade
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '200':
+          description: Grade
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Grade' }
+        '204': { description: No grade recorded }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ─────────────────────────────── Todos (§5.2) ──────────────────────────────
+  /todos:
+    get:
+      tags: [Todos]
+      summary: List todos (server owns list semantics — Taipei day boundaries)
+      operationId: listTodos
+      parameters:
+        - { name: list, in: query, schema: { type: string, enum: [today, upcoming, all, done, hidden], default: today } }
+        - { name: courseId, in: query, schema: { type: string, format: uuid } }
+        - { name: priority, in: query, schema: { type: integer, minimum: 1, maximum: 3 } }
+        - { name: sort, in: query, schema: { type: string, enum: [dueAt, priority, sortOrder], default: dueAt } }
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of todos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TodoPage' }
+    post:
+      tags: [Todos]
+      summary: Create a manual todo
+      operationId: createTodo
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTodo' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /todos/{id}:
+    patch:
+      tags: [Todos]
+      summary: Update a todo (optimistic CAS on baseVersion)
+      operationId: patchTodo
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchTodo' }
+      responses:
+        '200':
+          description: Updated (new updatedAt = next baseVersion)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaleWrite' }
+    delete:
+      tags: [Todos]
+      summary: Delete a manual todo (soft, 30d)
+      operationId: deleteTodo
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '204': { description: Deleted (soft) }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /todos/{id}/hide:
+    post:
+      tags: [Todos]
+      summary: Hide a todo
+      operationId: hideTodo
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '200':
+          description: Hidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /todos/{id}/restore:
+    post:
+      tags: [Todos]
+      summary: Restore a hidden todo
+      operationId: restoreTodo
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ─────────────────────────────── Notes (§5.2) ──────────────────────────────
+  /notes:
+    get:
+      tags: [Notes]
+      summary: List sticky notes
+      operationId: listNotes
+      parameters:
+        - { name: archived, in: query, schema: { type: boolean } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of notes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotePage' }
+    post:
+      tags: [Notes]
+      summary: Create a note
+      operationId: createNote
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateNote' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /notes/{id}:
+    patch:
+      tags: [Notes]
+      summary: Update a note (CAS on baseVersion)
+      operationId: patchNote
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchNote' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/StaleWrite' }
+    delete:
+      tags: [Notes]
+      summary: Delete a note (soft, 30d)
+      operationId: deleteNote
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '204': { description: Deleted (soft) }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notes/{id}/archive:
+    post:
+      tags: [Notes]
+      summary: Archive a note
+      operationId: archiveNote
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '200':
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notes/{id}/unarchive:
+    post:
+      tags: [Notes]
+      summary: Unarchive a note
+      operationId: unarchiveNote
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '200':
+          description: Unarchived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────────── Calendar (§5.2) ─────────────────────────────
+  /calendar:
+    get:
+      tags: [Calendar]
+      summary: Expanded calendar occurrences (bounded window ≤62 days)
+      operationId: getCalendar
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: types, in: query, schema: { type: string, example: 'class,assignment,exam,personal' } }
+        - { name: courseId, in: query, schema: { type: string, format: uuid } }
+        - { name: hidden, in: query, schema: { type: string, enum: [include, exclude], default: exclude } }
+      responses:
+        '200':
+          description: Occurrences
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CalendarItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /calendar/events:
+    post:
+      tags: [Calendar]
+      summary: Create a manual calendar event
+      operationId: createCalendarEvent
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CalendarEventInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarEvent' }
+
+  /calendar/events/{id}:
+    patch:
+      tags: [Calendar]
+      summary: Update a manual calendar event
+      operationId: patchCalendarEvent
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CalendarEventInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarEvent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Calendar]
+      summary: Delete a manual calendar event
+      operationId: deleteCalendarEvent
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ─────────────────────────────── Stats (§5.2) ──────────────────────────────
+  /stats/weekly:
+    get:
+      tags: [Stats]
+      summary: Weekly completion stats (zero-task weeks explicit)
+      operationId: getWeeklyStats
+      parameters:
+        - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 26, default: 12 } }
+      responses:
+        '200':
+          description: Weekly stats
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/WeeklyStat' }
+
+  /stats/semester:
+    get:
+      tags: [Stats]
+      summary: Semester progress
+      operationId: getSemesterStats
+      responses:
+        '200':
+          description: Semester stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SemesterStat' }
+
+  /stats/exams:
+    get:
+      tags: [Stats]
+      summary: Ranked exams (NULL starts_at surfaced, never omitted)
+      operationId: getExamStats
+      responses:
+        '200':
+          description: Exams
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ExamStat' }
+
+  # ──────────────────────────── Notifications (§5.2) ─────────────────────────
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Notification center (createdAt desc)
+      operationId: listNotifications
+      parameters:
+        - { name: unread, in: query, schema: { type: boolean } }
+        - { name: kind, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of notifications
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPage' }
+
+  /notifications/read:
+    post:
+      tags: [Notifications]
+      summary: Mark notifications read (ids ≤100, or all)
+      operationId: markNotificationsRead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkReadRequest' }
+      responses:
+        '204': { description: Marked read }
+
+  /notifications/{scheduleId}/snooze:
+    post:
+      tags: [Notifications]
+      summary: Snooze a reminder (generation-aware one-off, ≤7d future)
+      operationId: snoozeNotification
+      parameters:
+        - { name: scheduleId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [until]
+              properties: { until: { type: string, format: date-time } }
+      responses:
+        '200': { description: Snoozed }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /notification-prefs:
+    get:
+      tags: [Notifications]
+      summary: Full notification-preference tree
+      operationId: getNotificationPrefs
+      responses:
+        '200':
+          description: Prefs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPrefsTree' }
+
+  /notification-prefs/global:
+    patch:
+      tags: [Notifications]
+      summary: Update global notification prefs
+      operationId: patchGlobalNotificationPrefs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GlobalPrefsPatch' }
+      responses:
+        '200':
+          description: Effective
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectivePrefs' }
+
+  # ────────────────────────────── Devices (§5.2) ─────────────────────────────
+  /devices:
+    post:
+      tags: [Devices]
+      summary: Register / upsert a push device
+      operationId: upsertDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDevice' }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+
+  /devices/{id}:
+    delete:
+      tags: [Devices]
+      summary: Remove a device
+      operationId: deleteDevice
+      parameters: [ { $ref: '#/components/parameters/PathId' } ]
+      responses:
+        '204': { description: Removed }
+
+  # ────────────────────────────── Settings (§5.2) ────────────────────────────
+  /settings:
+    get:
+      tags: [Settings]
+      summary: User settings
+      operationId: getSettings
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+    patch:
+      tags: [Settings]
+      summary: Partial-update user settings
+      operationId: patchSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Settings' }
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+
+  # ────────────────────────── Internal (OIDC-gated, §1.12) ───────────────────
+  /internal/scheduler/tick:
+    post:
+      tags: [Internal]
+      summary: Scheduler tick (Cloud Scheduler → OIDC)
+      operationId: schedulerTick
+      security: [ { oidc: [] } ]
+      responses:
+        '202': { description: Accepted }
+
+  /internal/jobs/{name}:
+    post:
+      tags: [Internal]
+      summary: Run a named background job (OIDC)
+      operationId: runJob
+      security: [ { oidc: [] } ]
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string, enum: [deadline-scan, stats-rollover, cleanup] } }
+      responses:
+        '202': { description: Accepted }
+
+  /internal/safe-mode:
+    post:
+      tags: [Internal]
+      summary: Toggle safe-mode for a page type (OIDC)
+      operationId: setSafeMode
+      security: [ { oidc: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pageType, enabled]
+              properties:
+                pageType: { type: string }
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Applied }
+
+  /internal/health/deep:
+    get:
+      tags: [Internal]
+      summary: Deep dependency health (OIDC)
+      operationId: getDeepHealth
+      security: [ { oidc: [] } ]
+      responses:
+        '200': { description: OK }
+
+  # ─────────────────────────── Health probes (§1.13) ─────────────────────────
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: liveness
+      security: []
+      responses:
+        '200': { description: Alive }
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness
+      operationId: readiness
+      security: []
+      responses:
+        '200': { description: Ready }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    oidc:
+      type: http
+      scheme: bearer
+      description: Google-signed OIDC identity token (internal callers only, §1.12)
+
+  headers:
+    RequestId:
+      description: Correlation id (= trace id, §12.3); echoed on every response
+      schema: { type: string }
+    ETag:
+      description: Entity tag for conditional polling
+      schema: { type: string }
+
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque keyset cursor (base64url); tamper ⇒ 400
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Order:
+      name: order
+      in: query
+      schema: { type: string, enum: [asc, desc] }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: UUID; 24h dedup window; replay sets Idempotency-Replayed
+      schema: { type: string, format: uuid }
+    AppVersion:
+      name: X-App-Version
+      in: header
+      description: Client app version (N-2 compatibility ladder, §12.2)
+      schema: { type: string }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Unauthorized:
+      description: Missing/expired token or invalid handoff
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: Ownership/RLS denied
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: Not found (identical across users — never leaks existence)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: Conflict (idempotency/id-exists/state)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    StaleWrite:
+      description: Optimistic-lock miss; body carries the current row
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  current: { type: object, additionalProperties: true }
+    Gone:
+      description: Endpoint sunset (RFC 8594)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    RateLimited:
+      description: Rate limited / cooldown
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ServiceUnavailable:
+      description: Upstream (Portal/DB) unavailable
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    UpgradeRequired:
+      description: App below the minimum supported version (§12.2)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+
+  schemas:
+    # ---- Cross-cutting ----
+    Problem:
+      type: object
+      description: RFC 7807 problem+json (§5.1). `code` ∈ IRR §7 registry.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          x-extensible-enum:
+            - E-PORTAL-DOWN
+            - E-DB-FAIL
+            - E-NET-TIMEOUT
+            - E-SYNC-FAIL
+            - E-COOKIE-EXPIRED
+            - E-COOKIE-INVALID
+            - E-PERM-DENIED
+            - E-PARSE-DRIFT
+            - E-CAL-EXPAND
+            - E-NOTIF-FAIL
+            - E-UNEXPECTED
+            - E-PREF-SAVE
+            - E-SYNC-TOTAL
+            - SESSION_EXPIRED
+            - TOKEN_EXPIRED
+            - REFRESH_REUSED
+            - STALE_WRITE
+            - SYNC_COOLDOWN
+            - VALIDATION_FAILED
+            - AUTO_NOT_DELETABLE
+            - ENDPOINT_SUNSET
+            - APP_UPGRADE_REQUIRED
+        requestId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }
+        successor: { type: string, description: 'Sunset successor route (410/426)' }
+        storeUrl: { type: string, description: 'Upgrade store URL (426)' }
+
+    Cursor:
+      type: object
+      properties:
+        nextCursor: { type: string, nullable: true }
+
+    # ---- Auth ----
+    Cookie:
+      type: object
+      required: [name, value, domain, path]
+      properties:
+        name: { type: string }
+        value: { type: string, maxLength: 8192 }
+        domain: { type: string }
+        path: { type: string }
+        expires: { type: string, format: date-time, nullable: true }
+    CookieJar:
+      type: object
+      required: [cookies]
+      properties:
+        cookies:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/Cookie' }
+    DeviceInfo:
+      type: object
+      required: [platform, appVersion]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        appVersion: { type: string }
+        deviceLabel: { type: string, nullable: true }
+    PortalSessionRequest:
+      type: object
+      required: [cookieJar, deviceInfo]
+      properties:
+        cookieJar: { $ref: '#/components/schemas/CookieJar' }
+        deviceInfo: { $ref: '#/components/schemas/DeviceInfo' }
+    User:
+      type: object
+      required: [id, studentId, displayName, locale]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string }
+        displayName: { type: string }
+        locale: { type: string, x-extensible-enum: [zh-TW, en] }
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    SessionCreated:
+      allOf:
+        - $ref: '#/components/schemas/TokenPair'
+        - type: object
+          required: [user, initialSyncRunId]
+          properties:
+            user: { $ref: '#/components/schemas/User' }
+            initialSyncRunId: { type: string, format: uuid }
+    SessionRestored:
+      allOf:
+        - $ref: '#/components/schemas/TokenPair'
+        - type: object
+          required: [user]
+          properties:
+            user: { $ref: '#/components/schemas/User' }
+            resumedSyncRunId: { type: string, format: uuid, nullable: true }
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties: { refreshToken: { type: string } }
+    SessionInfo:
+      type: object
+      required: [user, portalSessionStatus, authTier]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        portalSessionStatus: { type: string, x-extensible-enum: [active, expired] }
+        authTier: { type: string, x-extensible-enum: [cookie] }
+
+    # ---- Sync ----
+    CategoryStatus:
+      type: string
+      x-extensible-enum: [ok, running, failed, idle]
+    ManualSyncAccepted:
+      type: object
+      required: [syncRunId, attached]
+      properties:
+        syncRunId: { type: string, format: uuid }
+        attached: { type: boolean }
+    SyncStatus:
+      type: object
+      required: [state, sessionExpired]
+      properties:
+        state: { type: string, x-extensible-enum: [idle, running, failed, ok] }
+        lastSyncedAt: { type: string, format: date-time, nullable: true }
+        sessionExpired: { type: boolean }
+        currentRun:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            categories:
+              type: object
+              additionalProperties: { $ref: '#/components/schemas/CategoryStatus' }
+    SyncHealth:
+      type: object
+      required: [portal, categories]
+      properties:
+        portal:
+          type: object
+          properties:
+            status: { type: string }
+            circuitOpen: { type: boolean }
+        categories:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/CategoryStatus' }
+              lastSuccessAt: { type: string, format: date-time, nullable: true }
+              errorCode: { type: string, nullable: true }
+    RetryRequest:
+      type: object
+      properties:
+        category: { type: string, x-extensible-enum: [courses, assignments, exams, grades, announcements] }
+    SyncRun:
+      type: object
+      required: [id, trigger, status, startedAt]
+      properties:
+        id: { type: string, format: uuid }
+        trigger: { type: string, x-extensible-enum: [manual, scheduled, initial] }
+        status: { type: string, x-extensible-enum: [ok, running, failed, canceled] }
+        startedAt: { type: string, format: date-time }
+        durationMs: { type: integer, nullable: true }
+        categories:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/CategoryStatus' }
+    SyncRunPage:
+      allOf:
+        - $ref: '#/components/schemas/Cursor'
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/SyncRun' } }
+
+    # ---- Courses ----
+    Schedule:
+      type: object
+      properties:
+        weekday: { type: integer, minimum: 1, maximum: 7 }
+        startsAt: { type: string }
+        endsAt: { type: string }
+        room: { type: string, nullable: true }
+        building: { type: string, nullable: true }
+        weekPattern: { type: string, nullable: true }
+        changedAt: { type: string, format: date-time, nullable: true }
+    Course:
+      type: object
+      required: [id, code, titleZh, colorIndex, hidden, schedules]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        titleZh: { type: string }
+        titleEn: { type: string, nullable: true }
+        instructor: { type: string, nullable: true }
+        colorIndex: { type: integer, minimum: 0, maximum: 9 }
+        hidden: { type: boolean }
+        schedules: { type: array, items: { $ref: '#/components/schemas/Schedule' } }
+    CourseDetail:
+      allOf:
+        - $ref: '#/components/schemas/Course'
+        - type: object
+          properties:
+            assignments: { $ref: '#/components/schemas/AssignmentPage' }
+            exams: { type: array, items: { $ref: '#/components/schemas/ExamStat' } }
+            notificationPrefs: { type: object, additionalProperties: true }
+    EnrollmentPatch:
+      type: object
+      properties:
+        colorIndex: { type: integer, minimum: 0, maximum: 9 }
+        hidden: { type: boolean }
+    NotificationPrefPatch:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        offsets:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [7d, 3d, 1d, 12h, 3h, 1h] }
+    EffectivePrefs:
+      type: object
+      properties:
+        effective: { type: object, additionalProperties: true }
+
+    # ---- Assignments ----
+    Attachment:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string }
+    Assignment:
+      type: object
+      required: [id, title, source, status, hidden]
+      properties:
+        id: { type: string, format: uuid }
+        courseId: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        dueAt: { type: string, format: date-time, nullable: true }
+        dueConfidence: { type: string, x-extensible-enum: [exact, inferred, none], nullable: true }
+        source: { type: string, x-extensible-enum: [portal, manual] }
+        status: { type: string, x-extensible-enum: [active, archived] }
+        hidden: { type: boolean }
+        changedAt: { type: string, format: date-time, nullable: true }
+        overrides: { type: object, additionalProperties: true, nullable: true }
+        attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' } }
+    AssignmentPage:
+      allOf:
+        - $ref: '#/components/schemas/Cursor'
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Assignment' } }
+    CreateAssignment:
+      type: object
+      required: [title]
+      properties:
+        id: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string }
+        dueAt: { type: string, format: date-time }
+    PatchAssignment:
+      type: object
+      description: Manual → any field; portal-sourced → becomes an override entry
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, nullable: true }
+        dueAt: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [active, archived] }
+        hidden: { type: boolean }
+    Grade:
+      type: object
+      properties:
+        grade: { type: string }
+        gradedAt: { type: string, format: date-time }
+        history: { type: array, items: { type: object, additionalProperties: true } }
+
+    # ---- Todos ----
+    Todo:
+      type: object
+      required: [id, title, priority, source, sortOrder, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        dueAt: { type: string, format: date-time, nullable: true }
+        priority: { type: integer, minimum: 1, maximum: 3 }
+        source: { type: string, x-extensible-enum: [portal, manual] }
+        assignmentId: { type: string, format: uuid, nullable: true }
+        courseId: { type: string, format: uuid, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        hiddenAt: { type: string, format: date-time, nullable: true }
+        sortOrder: { type: number }
+        updatedAt: { type: string, format: date-time }
+    TodoPage:
+      allOf:
+        - $ref: '#/components/schemas/Cursor'
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Todo' } }
+    CreateTodo:
+      type: object
+      required: [title]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        dueAt: { type: string, format: date-time }
+        courseId: { type: string, format: uuid }
+        priority: { type: integer, minimum: 1, maximum: 3 }
+    PatchTodo:
+      type: object
+      required: [baseVersion]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        dueAt: { type: string, format: date-time, nullable: true }
+        priority: { type: integer, minimum: 1, maximum: 3 }
+        sortOrder: { type: number }
+        completedAt: { type: string, format: date-time, nullable: true }
+        baseVersion: { type: string, format: date-time }
+
+    # ---- Notes ----
+    Note:
+      type: object
+      required: [id, body, color, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string, maxLength: 2000 }
+        color: { type: string, x-extensible-enum: [yellow, green, blue, pink, purple, gray] }
+        pinnedDate: { type: string, format: date, nullable: true }
+        pinnedDashboard: { type: boolean, nullable: true }
+        archivedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    NotePage:
+      allOf:
+        - $ref: '#/components/schemas/Cursor'
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Note' } }
+    CreateNote:
+      type: object
+      required: [body, color]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        color: { type: string, x-extensible-enum: [yellow, green, blue, pink, purple, gray] }
+        pinnedDate: { type: string, format: date }
+        pinnedDashboard: { type: boolean }
+    PatchNote:
+      type: object
+      required: [baseVersion]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        color: { type: string, x-extensible-enum: [yellow, green, blue, pink, purple, gray] }
+        pinnedDate: { type: string, format: date, nullable: true }
+        pinnedDashboard: { type: boolean }
+        baseVersion: { type: string, format: date-time }
+
+    # ---- Calendar ----
+    CalendarItem:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, x-extensible-enum: [class, assignment, exam, personal] }
+        date: { type: string, format: date, nullable: true }
+        startsAt: { type: string, format: date-time, nullable: true }
+        endsAt: { type: string, format: date-time, nullable: true }
+        sourceRef:
+          type: object
+          properties:
+            kind: { type: string }
+            id: { type: string }
+        hidden: { type: boolean, nullable: true }
+        courseColorIndex: { type: integer, minimum: 0, maximum: 9, nullable: true }
+    CalendarEventInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time, nullable: true }
+        allDay: { type: boolean }
+        note: { type: string, nullable: true }
+    CalendarEvent:
+      allOf:
+        - $ref: '#/components/schemas/CalendarEventInput'
+        - type: object
+          required: [id]
+          properties:
+            id: { type: string, format: uuid }
+
+    # ---- Stats ----
+    WeeklyStat:
+      type: object
+      required: [weekStart, totalTasks, completedTasks, state]
+      properties:
+        weekStart: { type: string, format: date }
+        totalTasks: { type: integer }
+        completedTasks: { type: integer }
+        state: { type: string, x-extensible-enum: [normal, no_tasks] }
+        recalculatedAt: { type: string, format: date-time, nullable: true }
+    SemesterStat:
+      type: object
+      required: [semesterId, percent, weekNumber, totalWeeks]
+      properties:
+        semesterId: { type: string }
+        percent: { type: number }
+        weekNumber: { type: integer }
+        totalWeeks: { type: integer }
+        milestones:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              date: { type: string, format: date }
+              label: { type: string }
+              passed: { type: boolean }
+    ExamStat:
+      type: object
+      required: [examId, courseId, kind, state, source]
+      properties:
+        examId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        kind: { type: string, x-extensible-enum: [midterm, final, quiz, other] }
+        startsAt: { type: string, format: date-time, nullable: true }
+        state: { type: string, x-extensible-enum: [scheduled, not_yet_scheduled] }
+        source: { type: string, x-extensible-enum: [portal, manual] }
+        changedAt: { type: string, format: date-time, nullable: true }
+
+    # ---- Notifications ----
+    Notification:
+      type: object
+      required: [id, kind, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        subjectType: { type: string, nullable: true }
+        subjectId: { type: string, nullable: true }
+        payload: { type: object, additionalProperties: true }
+        readAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    NotificationPage:
+      allOf:
+        - $ref: '#/components/schemas/Cursor'
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+    MarkReadRequest:
+      oneOf:
+        - type: object
+          required: [ids]
+          properties:
+            ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+        - type: object
+          required: [all]
+          properties:
+            all: { type: boolean, enum: [true] }
+    QuietHours:
+      type: object
+      nullable: true
+      properties:
+        start: { type: string }
+        end: { type: string }
+    GlobalPrefsPatch:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        offsets:
+          type: array
+          items: { type: string, enum: [7d, 3d, 1d, 12h, 3h, 1h] }
+        quietHours: { $ref: '#/components/schemas/QuietHours' }
+        digest: { type: boolean }
+        grades: { type: boolean }
+    NotificationPrefsTree:
+      type: object
+      properties:
+        global: { type: object, additionalProperties: true }
+        courses: { type: array, items: { type: object, additionalProperties: true } }
+        assignments: { type: array, items: { type: object, additionalProperties: true } }
+        defaults: { type: object, additionalProperties: true }
+
+    # ---- Devices / Settings ----
+    CreateDevice:
+      type: object
+      required: [platform, pushToken, appVersion]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        pushToken: { type: string }
+        appVersion: { type: string }
+    Device:
+      type: object
+      required: [id, platform]
+      properties:
+        id: { type: string, format: uuid }
+        platform: { type: string, enum: [ios, android] }
+        appVersion: { type: string }
+    Settings:
+      type: object
+      description: user_settings columns (DB §3.1); PATCH is partial
+      additionalProperties: true

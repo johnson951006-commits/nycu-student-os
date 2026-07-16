@@ -1,0 +1,38 @@
+name: Bug
+description: A defect against specified behavior (QS §1.7 severity).
+labels: ["type:fix"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (QS §1.7)
+      options:
+        - "S1 — data loss / security / crash-on-launch / missed deadline"
+        - "S2 — core flow broken, no workaround"
+        - "S3 — feature impaired, workaround exists"
+        - "S4 — cosmetic / minor"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Deterministic reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected (with corpus citation)
+      description: What the spec says should happen, and where.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true
+  - type: input
+    id: slo
+    attributes:
+      label: Affected SLO / metric (if any)

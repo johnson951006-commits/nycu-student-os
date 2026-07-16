@@ -1,0 +1,35 @@
+name: Spec amendment
+description: Propose a change to a frozen corpus document (AI_Coding_Protocol §11.3 governance).
+labels: ["type:docs", "needs-adr"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The corpus is frozen. Code never leads the spec. An amendment is a human
+        governance act (architect + eng-manager) — this issue DRAFTS it; it does not enact it.
+  - type: input
+    id: owning-doc
+    attributes:
+      label: Owning document
+      placeholder: NYCU_Student_OS_Backend_Implementation_Spec
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Cross-document impact
+      description: Deviation ledgers, RTM (QS §2), and tests affected in the same governance change.
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Why the current spec is defective / ambiguous
+    validations:
+      required: true

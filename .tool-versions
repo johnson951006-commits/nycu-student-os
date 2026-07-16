@@ -1,0 +1,10 @@
+# asdf tool pins (BEP §2) — system toolchain, byte-identical across machines & CI.
+# Package-manager-level tools (Prisma, NestJS CLI, melos, FVM) are pinned in
+# docs/toolchain.md and enforced in package.json / pubspec.yaml by INFRA-004 / INFRA-008.
+# Version bumps follow the OPS §10 dependency-upgrade cadence.
+nodejs 22.11.0
+pnpm 9.12.3
+flutter 3.24.5-stable
+terraform 1.9.8
+gcloud 497.0.0
+firebase 13.23.1

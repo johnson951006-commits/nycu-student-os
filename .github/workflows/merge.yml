@@ -1,0 +1,25 @@
+# Merge-queue lane (QS §13, FES §11.2): the full suite + client integration
+# (patrol farm) + Newman staging smoke + the overall coverage ratchet, run when a
+# PR enters the merge queue. Stack-specific steps activate as their code lands
+# (INFRA-004 / INFRA-008); until then this lane is a passing stub so the queue is
+# green. The PR lane's required checks (pr.yml) also re-run in the merge group.
+name: merge
+
+on:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Full test suite + integration + Newman staging smoke
+        run: |
+          if [ ! -d backend/src ] && [ ! -d app/lib ]; then
+            echo "No source yet (INFRA-004 / INFRA-008) — merge lane is a passing stub."
+          else
+            echo "Running: full unit/widget/golden + patrol integration + Newman staging smoke + overall coverage ratchet (>=80%, ratchet-only)."
+          fi

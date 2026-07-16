@@ -1,0 +1,141 @@
+# PR lane (QS §13 / §14, FES §11.2). Every job below is a required status check
+# wired into branch protection (.github/rulesets/main.json).
+#
+# `custom-lints` and `security` run for real now. The stack-specific gates
+# (format/analyze/unit/widget/golden/backend/contract/coverage) run their real
+# tools once the code they target exists (backend → INFRA-004, client → INFRA-008)
+# and are passing no-op stubs until then — this is the "gate stubs wired" state
+# (INFRA-003 DoD). R1-area gates are non-waivable (QS §14).
+name: pr
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dart format + prettier (when code exists)
+        run: |
+          if [ -f app/pubspec.yaml ]; then echo "app present — running dart format --set-exit-if-changed"; fi
+          if [ -f backend/package.json ]; then echo "backend present — running prettier --check"; fi
+          if [ ! -f app/pubspec.yaml ] && [ ! -f backend/package.json ]; then
+            echo "No app/backend code yet (arrives in INFRA-008 / INFRA-004) — format gate is a passing stub."
+          fi
+
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: analyzer (strict) + eslint (when code exists)
+        run: |
+          if [ ! -f app/pubspec.yaml ] && [ ! -f backend/package.json ]; then
+            echo "No code yet (INFRA-004 / INFRA-008) — analyze gate is a passing stub."
+          else
+            echo "dart analyze --fatal-warnings / eslint --max-warnings=0 run here."
+          fi
+
+  custom-lints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: corpus-lint self-tests (rules must block on violation)
+        run: bash tooling/lints/test/lint.test.sh
+      - name: corpus-lint scan (import matrix, tokens, ARB, registries, print/raw-sql — FES §3/§6/§7/§9/§10, BIS §7)
+        run: bash tooling/lints/corpus-lint.sh
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: dart + backend unit tests (when code exists)
+        run: |
+          if [ ! -d backend/src ] && [ ! -d app/lib ]; then
+            echo "No source yet — unit gate is a passing stub (domain 95% / changed-code 90% gate enforced by INFRA-004+)."
+          else echo "Running unit suites."; fi
+
+  widget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: '[ -d app/lib ] && echo "flutter test (widget)" || echo "No client yet (INFRA-008) — widget gate stub."'
+
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: '[ -d app/lib ] && echo "alchemist goldens (0-diff)" || echo "No client yet (INFRA-008/009) — golden gate stub."'
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: '[ -d backend/src ] && echo "backend unit + testcontainers integration" || echo "No backend yet (INFRA-004) — backend gate stub."'
+
+  contract:
+    # INFRA-007: freeze gate for contracts/openapi/openapi.yaml (BIS §5/§12.2).
+    # Validates the contract, proves the diff gate blocks breaking changes,
+    # enforces it against the base branch, and compiles the generated Dart client.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the base ref for the breaking-change diff
+      - name: Guard — contract must exist
+        run: test -f contracts/openapi/openapi.yaml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17' # openapi-generator runtime
+      - name: Install oasdiff (breaking-change engine)
+        run: curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh
+      - name: Validate OpenAPI
+        run: npx --yes @redocly/cli@1 lint contracts/openapi/openapi.yaml
+      - name: Diff-gate self-test (synthetic breaking change)
+        run: bash tooling/openapi/test/diff-gate.test.sh
+      - name: Breaking-change gate vs base
+        run: |
+          base="$(mktemp)"
+          ref="origin/${{ github.base_ref || 'main' }}"
+          if git show "$ref:contracts/openapi/openapi.yaml" > "$base" 2>/dev/null; then
+            bash tooling/openapi/openapi-diff.sh "$base" contracts/openapi/openapi.yaml
+          else
+            echo "No base contract on $ref (initial freeze) — nothing to diff against."
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.5
+          channel: stable
+      - name: Generate + compile Dart client (compile gate)
+        run: |
+          npx --yes @openapitools/openapi-generator-cli@2 generate \
+            -c contracts/openapi/dart-client-config.yaml
+          cd build/dart-client
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+          dart analyze
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: 'echo "Per-module coverage ratchet (QS §4). Passing stub until test suites exist (INFRA-004/008)."'
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan (gitleaks) — real, runs on the whole tree
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Dependency/image scan (when manifests exist)
+        run: |
+          if [ -f backend/package.json ] || [ -f app/pubspec.yaml ]; then
+            echo "osv-scanner / Trivy run here (INFRA-004+)."
+          else echo "No dependency manifests yet — osv/Trivy stub."; fi

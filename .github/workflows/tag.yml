@@ -1,0 +1,31 @@
+# Tag lane (QS §13, FES §11 / OPS §3): on a version tag, run the staged production
+# rollout gated on Sentry release health (internal → beta → 10% → 50% → 100%).
+# Production promotion requires human approval (ENG lead + PM) via the protected
+# `production` GitHub Environment (QS §14 deployment-approval gate; OPS §11).
+# Rollout/deploy steps activate once the app and delivery pipeline exist
+# (INFRA-008 / release artifacts); until then this lane is a passing stub.
+name: tag
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  staged-rollout:
+    runs-on: ubuntu-latest
+    # Production promotion is gated by required reviewers on this environment
+    # (configure ENG-lead + PM as required reviewers — OPS §11 / QS §15.7).
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Staged rollout (Sentry release-health gated)
+        run: |
+          echo "Deployment-approval gate: production environment requires ENG-lead + PM reviewers (QS §14)."
+          if [ ! -d app/lib ]; then
+            echo "No release artifacts yet (INFRA-008+) — staged rollout is a passing stub."
+          else
+            echo "internal -> beta (crash-free >=99.5%/48h) -> prod 10% -> 50% -> 100%, each gated on Sentry release health."
+          fi
