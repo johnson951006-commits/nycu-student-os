@@ -34,12 +34,16 @@ dependencies:
   # Localization (FA §7): gen_l10n runtime; version pinned to the SDK's own
   intl: 0.19.0
 
+  # Immutable domain entities (FA §2 domain/entities — freezed)
+  freezed_annotation: 2.4.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: 5.0.0
   build_runner: 2.4.13
   drift_dev: 2.21.0
+  freezed: 2.5.7
 
   # Golden testing (QS/FES §17): theme×locale component baselines
   alchemist: 0.10.0
